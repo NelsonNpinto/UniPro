@@ -8,6 +8,8 @@ import {
 } from '../services/cartService.js';
 import { parse, addItemSchema, updateItemSchema } from '../lib/validate.js';
 import { checkout } from '../services/checkoutService.js';
+import { AppError } from '../lib/errors.js';
+import { requireIdempotencyKey, fingerprintRequest } from '../middleware/idempotency.js';
 
 export function cartRoutes({ store, config, paymentGateway }) {
   const router = Router();
@@ -38,9 +40,27 @@ export function cartRoutes({ store, config, paymentGateway }) {
     res.json(viewCart(store, req.params.cartId, config));
   });
 
-  // Synchronous handler on purpose: the checkout critical section must not yield.
-  router.post('/:cartId/checkout', (req, res) => {
-    const order = checkout({ store, paymentGateway, config }, { cartId: req.params.cartId });
+  // Synchronous handler on purpose: the idempotency lookup, the checkout critical
+  // section, and recording the key all run without yielding, so a retry can never
+  // interleave and produce a second order.
+  router.post('/:cartId/checkout', requireIdempotencyKey, (req, res) => {
+    const { cartId } = req.params;
+    const fingerprint = fingerprintRequest(cartId, req.body);
+
+    const seen = store.idempotencyKeys.get(req.idempotencyKey);
+    if (seen) {
+      if (seen.requestFingerprint !== fingerprint) {
+        throw new AppError('IDEMPOTENCY_CONFLICT', 'idempotency key reused with a different request');
+      }
+      return res.status(200).json(seen.order);
+    }
+
+    const order = checkout({ store, paymentGateway, config }, { cartId });
+    store.idempotencyKeys.set(req.idempotencyKey, {
+      status: 'completed',
+      requestFingerprint: fingerprint,
+      order,
+    });
     res.status(201).json(order);
   });
 
