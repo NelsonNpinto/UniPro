@@ -1,3 +1,9 @@
+// Single API client. The base URL and admin token come from the environment so
+// the same build can point at a different backend. In dev the default base is
+// empty and Vite proxies the paths to the backend, so no CORS setup is needed.
+const BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+export const defaultAdminToken = import.meta.env.VITE_ADMIN_TOKEN ?? 'dev-admin-token';
+
 export class ApiError extends Error {
   constructor(code, message, status, details) {
     super(message);
@@ -8,7 +14,7 @@ export class ApiError extends Error {
 }
 
 async function requestJson(path, options = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: { 'content-type': 'application/json', ...(options.headers || {}) },
   });
@@ -46,6 +52,8 @@ export const api = {
   getOrder: (orderId) => requestJson(`/orders/${orderId}`),
   generateCoupon: (adminToken) =>
     requestJson('/admin/coupons', { method: 'POST', headers: { 'x-admin-token': adminToken } }),
+  listCoupons: (adminToken) =>
+    requestJson('/admin/coupons', { headers: { 'x-admin-token': adminToken } }),
   getReport: (adminToken) =>
     requestJson('/admin/report', { headers: { 'x-admin-token': adminToken } }),
 };

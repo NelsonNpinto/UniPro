@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { messageFor } from './errorMessages.js';
 import { Banner } from './components/Banner.jsx';
-import { Products } from './components/Products.jsx';
-import { Cart } from './components/Cart.jsx';
-import { Checkout } from './components/Checkout.jsx';
-import { OrderConfirmation } from './components/OrderConfirmation.jsx';
-import { Admin } from './components/Admin.jsx';
+import { Products } from './views/Products.jsx';
+import { Cart } from './views/Cart.jsx';
+import { Checkout } from './views/Checkout.jsx';
+import { OrderConfirmation } from './views/OrderConfirmation.jsx';
+import { Admin } from './views/Admin.jsx';
 
 const CART_KEY = 'cartId';
 
@@ -114,11 +114,13 @@ export default function App() {
     }
   }
 
+  // Called when the checkout succeeds. The Checkout view stays mounted so it can
+  // demonstrate the idempotent retry; here we just consume the cart and re-read
+  // products so the reduced stock is visible.
   function handlePlaced(placed) {
     setOrder(placed);
     localStorage.removeItem(CART_KEY);
     setCart(null);
-    setView('order');
     setBanner(null);
     loadProducts();
   }
@@ -166,7 +168,13 @@ export default function App() {
           />
         )}
         {view === 'checkout' && (
-          <Checkout cart={cart} currency={currency} onPlaced={handlePlaced} onError={handleError} />
+          <Checkout
+            cart={cart}
+            currency={currency}
+            onPlaced={handlePlaced}
+            onViewConfirmation={() => setView('order')}
+            onError={handleError}
+          />
         )}
         {view === 'order' && (
           <OrderConfirmation order={order} onContinue={() => setView('products')} />
