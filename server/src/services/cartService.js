@@ -14,6 +14,54 @@ function requireCart(store, cartId) {
   return cart;
 }
 
+function requireOpenCart(store, cartId) {
+  const cart = requireCart(store, cartId);
+  if (cart.status !== 'open') {
+    throw new AppError('CART_ALREADY_CHECKED_OUT', `cart ${cartId} is already checked out`);
+  }
+  return cart;
+}
+
+function requireProduct(store, productId) {
+  const product = store.products.get(productId);
+  if (!product) throw new AppError('PRODUCT_NOT_FOUND', `product ${productId} not found`);
+  return product;
+}
+
+// Inventory is not reserved here; availability is enforced authoritatively at
+// checkout. Adding a product that is already in the cart raises its quantity.
+export function addItem(store, cartId, productId, quantity) {
+  const cart = requireOpenCart(store, cartId);
+  requireProduct(store, productId);
+  const existing = cart.items.find((item) => item.productId === productId);
+  if (existing) {
+    existing.quantity += quantity;
+  } else {
+    cart.items.push({ productId, quantity });
+  }
+  return cart;
+}
+
+export function updateItem(store, cartId, productId, quantity) {
+  const cart = requireOpenCart(store, cartId);
+  const item = cart.items.find((entry) => entry.productId === productId);
+  if (!item) {
+    throw new AppError('ITEM_NOT_IN_CART', `product ${productId} is not in cart ${cartId}`);
+  }
+  item.quantity = quantity;
+  return cart;
+}
+
+export function removeItem(store, cartId, productId) {
+  const cart = requireOpenCart(store, cartId);
+  const index = cart.items.findIndex((entry) => entry.productId === productId);
+  if (index === -1) {
+    throw new AppError('ITEM_NOT_IN_CART', `product ${productId} is not in cart ${cartId}`);
+  }
+  cart.items.splice(index, 1);
+  return cart;
+}
+
 // The cart stores only product references and quantities. Prices and names are
 // read live from products at view time, so a cart never carries a stale price.
 export function viewCart(store, cartId, config) {
