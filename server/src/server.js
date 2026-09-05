@@ -2,13 +2,16 @@ import express from 'express';
 import { pathToFileURL } from 'node:url';
 import { config as defaultConfig } from './config.js';
 import { createStore } from './store/store.js';
+import { createPaymentGateway } from './services/paymentGateway.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { productRoutes } from './routes/products.js';
 import { cartRoutes } from './routes/carts.js';
+import { orderRoutes } from './routes/orders.js';
 
 export function createApp(store, options = {}) {
   const config = options.config ?? defaultConfig;
-  const deps = { store, config };
+  const paymentGateway = options.paymentGateway ?? createPaymentGateway();
+  const deps = { store, config, paymentGateway };
 
   const app = express();
   app.use(express.json());
@@ -16,6 +19,7 @@ export function createApp(store, options = {}) {
   app.get('/health', (req, res) => res.json({ ok: true }));
   app.use('/products', productRoutes(deps));
   app.use('/carts', cartRoutes(deps));
+  app.use('/orders', orderRoutes(deps));
 
   app.use(errorHandler);
   return app;

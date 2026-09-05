@@ -7,8 +7,9 @@ import {
   removeItem,
 } from '../services/cartService.js';
 import { parse, addItemSchema, updateItemSchema } from '../lib/validate.js';
+import { checkout } from '../services/checkoutService.js';
 
-export function cartRoutes({ store, config }) {
+export function cartRoutes({ store, config, paymentGateway }) {
   const router = Router();
 
   router.post('/', (req, res) => {
@@ -35,6 +36,12 @@ export function cartRoutes({ store, config }) {
   router.delete('/:cartId/items/:productId', (req, res) => {
     removeItem(store, req.params.cartId, req.params.productId);
     res.json(viewCart(store, req.params.cartId, config));
+  });
+
+  // Synchronous handler on purpose: the checkout critical section must not yield.
+  router.post('/:cartId/checkout', (req, res) => {
+    const order = checkout({ store, paymentGateway, config }, { cartId: req.params.cartId });
+    res.status(201).json(order);
   });
 
   return router;
