@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../lib/errors.js';
-import { lineTotalMinor, sumMinor } from '../lib/money.js';
+import { lineTotalMinor, sumMinor, applyDiscount } from '../lib/money.js';
 
 function deepFreeze(value) {
   if (value && typeof value === 'object') {
@@ -13,9 +13,9 @@ function deepFreeze(value) {
 // Checkout is one synchronous critical section. Every check that can fail runs
 // first; the mutations that follow cannot fail and never yield. Because nothing
 // awaits between the first read and the last write, no two checkouts interleave,
-// a partial checkout is never observable, and two checkouts cannot both take the
-// last unit of stock.
-export function checkout({ store, paymentGateway, config }, { cartId }) {
+// a partial checkout is never observable, two checkouts cannot both take the
+// last unit of stock, and two cannot both redeem the same coupon.
+export function checkout({ store, paymentGateway, config }, { cartId, couponCode }) {
   // Load cart; reject if missing, already checked out, or empty.
   const cart = store.carts.get(cartId);
   if (!cart) throw new AppError('CART_NOT_FOUND', `cart ${cartId} not found`);
@@ -42,6 +42,16 @@ export function checkout({ store, paymentGateway, config }, { cartId }) {
     return { product, quantity: item.quantity };
   });
 
+  // Load the coupon if one was supplied; reject if missing or already redeemed.
+  let coupon = null;
+  if (couponCode != null) {
+    coupon = store.coupons.get(couponCode);
+    if (!coupon) throw new AppError('COUPON_NOT_FOUND', `coupon ${couponCode} not found`);
+    if (coupon.status !== 'available') {
+      throw new AppError('COUPON_ALREADY_REDEEMED', `coupon ${couponCode} is not available`);
+    }
+  }
+
   // Compute totals from current product prices and snapshot each line.
   const items = lines.map(({ product, quantity }) => ({
     productId: product.id,
@@ -51,10 +61,10 @@ export function checkout({ store, paymentGateway, config }, { cartId }) {
     lineTotalMinor: lineTotalMinor(product.unitPriceMinor, quantity),
   }));
   const grossMinor = sumMinor(items.map((item) => item.lineTotalMinor));
-  const discountMinor = 0;
-  const totalMinor = grossMinor;
+  const { discountMinor, totalMinor } = applyDiscount(grossMinor, coupon ? coupon.percentOff : 0);
 
-  // Charge before mutating. A decline throws here, leaving all state untouched.
+  // Charge before mutating. A decline throws here, leaving all state untouched,
+  // so a failed payment never consumes inventory or the coupon.
   const payment = paymentGateway.charge({ amountMinor: totalMinor, currency: config.currency });
   if (!payment.ok) {
     throw new AppError('PAYMENT_FAILED', 'payment was declined', { reason: payment.reason });
@@ -64,6 +74,8 @@ export function checkout({ store, paymentGateway, config }, { cartId }) {
   for (const { product, quantity } of lines) {
     product.availableInventory -= quantity;
   }
+  if (coupon) coupon.status = 'redeemed';
+
   const order = {
     id: randomUUID(),
     createdAt: new Date().toISOString(),
@@ -71,12 +83,14 @@ export function checkout({ store, paymentGateway, config }, { cartId }) {
     items,
     grossMinor,
     discountMinor,
+    ...(coupon ? { couponCode: coupon.code } : {}),
     totalMinor,
     currency: config.currency,
   };
   store.orders.set(order.id, order);
   cart.status = 'checked_out';
   store.counters.ordersPlaced += 1;
+  if (coupon) coupon.redeemedByOrderId = order.id;
 
   // Invariant: an order's totals are fixed at creation. Freeze the snapshot.
   return deepFreeze(order);

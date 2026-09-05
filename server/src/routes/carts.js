@@ -6,7 +6,7 @@ import {
   updateItem,
   removeItem,
 } from '../services/cartService.js';
-import { parse, addItemSchema, updateItemSchema } from '../lib/validate.js';
+import { parse, addItemSchema, updateItemSchema, checkoutSchema } from '../lib/validate.js';
 import { checkout } from '../services/checkoutService.js';
 import { AppError } from '../lib/errors.js';
 import { requireIdempotencyKey, fingerprintRequest } from '../middleware/idempotency.js';
@@ -45,7 +45,8 @@ export function cartRoutes({ store, config, paymentGateway }) {
   // interleave and produce a second order.
   router.post('/:cartId/checkout', requireIdempotencyKey, (req, res) => {
     const { cartId } = req.params;
-    const fingerprint = fingerprintRequest(cartId, req.body);
+    const { couponCode } = parse(checkoutSchema, req.body);
+    const fingerprint = fingerprintRequest(cartId, { couponCode });
 
     const seen = store.idempotencyKeys.get(req.idempotencyKey);
     if (seen) {
@@ -55,7 +56,7 @@ export function cartRoutes({ store, config, paymentGateway }) {
       return res.status(200).json(seen.order);
     }
 
-    const order = checkout({ store, paymentGateway, config }, { cartId });
+    const order = checkout({ store, paymentGateway, config }, { cartId, couponCode });
     store.idempotencyKeys.set(req.idempotencyKey, {
       status: 'completed',
       requestFingerprint: fingerprint,

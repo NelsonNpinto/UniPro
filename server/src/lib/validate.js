@@ -10,6 +10,10 @@ export const updateItemSchema = z.object({
   quantity: z.number().int().min(1),
 });
 
+export const checkoutSchema = z.object({
+  couponCode: z.string().min(1).optional(),
+});
+
 export function parse(schema, data) {
   const result = schema.safeParse(data ?? {});
   if (!result.success) {
