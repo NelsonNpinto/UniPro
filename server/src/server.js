@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { productRoutes } from './routes/products.js';
 import { cartRoutes } from './routes/carts.js';
 import { orderRoutes } from './routes/orders.js';
+import { adminRoutes } from './routes/admin.js';
 
 export function createApp(store, options = {}) {
   const config = options.config ?? defaultConfig;
@@ -20,6 +21,7 @@ export function createApp(store, options = {}) {
   app.use('/products', productRoutes(deps));
   app.use('/carts', cartRoutes(deps));
   app.use('/orders', orderRoutes(deps));
+  app.use('/admin', adminRoutes(deps));
 
   app.use(errorHandler);
   return app;
