@@ -32,6 +32,13 @@ describe('admin report', () => {
     expect(report.coupons).toEqual({ generated: 1, available: 0, redeemed: 1 });
   });
 
+  it('exposes the milestone interval and coupon percent for the admin panel', async () => {
+    const { app, config } = buildApp({ N: 3, X: 15 });
+    const report = (await request(app).get('/admin/report').set('x-admin-token', config.adminToken)).body;
+    expect(report.milestoneInterval).toBe(3);
+    expect(report.couponPercentOff).toBe(15);
+  });
+
   it('is read-only: repeated calls return identical results', async () => {
     const { app, config } = buildApp();
     const products = await getProducts(app);

@@ -29,3 +29,17 @@ export function generateCoupon({ store, config }) {
   store.coupons.set(coupon.code, coupon);
   return coupon;
 }
+
+// Read-only listing for the admin panel. Sorted by milestone so the newest
+// reward appears last. Returns plain copies; it mutates nothing.
+export function listCoupons({ store }) {
+  return [...store.coupons.values()]
+    .map((coupon) => ({
+      code: coupon.code,
+      percentOff: coupon.percentOff,
+      milestone: coupon.milestone,
+      status: coupon.status,
+      ...(coupon.redeemedByOrderId ? { redeemedByOrderId: coupon.redeemedByOrderId } : {}),
+    }))
+    .sort((a, b) => a.milestone - b.milestone);
+}

@@ -35,6 +35,36 @@ describe('coupon generation', () => {
   });
 });
 
+describe('coupon listing', () => {
+  it('lists coupons with their status and is read-only', async () => {
+    const { app, config } = buildApp({ N: 1 });
+    const products = await getProducts(app);
+    const prod = products.find((p) => p.availableInventory >= 5);
+
+    const empty = await request(app).get('/admin/coupons').set('x-admin-token', config.adminToken);
+    expect(empty.body).toEqual([]);
+
+    const coupon = await reachMilestoneCoupon(app, config, prod.id);
+    await checkout(app, await newCartWith(app, prod.id, 1), { couponCode: coupon.code });
+
+    const listed = (await request(app).get('/admin/coupons').set('x-admin-token', config.adminToken)).body;
+    expect(listed).toHaveLength(1);
+    expect(listed[0].code).toBe(coupon.code);
+    expect(listed[0].status).toBe('redeemed');
+    expect(listed[0].percentOff).toBe(config.couponPercentOff);
+
+    const again = (await request(app).get('/admin/coupons').set('x-admin-token', config.adminToken)).body;
+    expect(again).toEqual(listed);
+  });
+
+  it('forbids listing without the token', async () => {
+    const { app } = buildApp();
+    const res = await request(app).get('/admin/coupons');
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+});
+
 describe('coupon redemption', () => {
   it('lets only one of two concurrent checkouts redeem the same coupon', async () => {
     const { app, store, config } = buildApp({ N: 1 });

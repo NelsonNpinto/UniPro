@@ -32,6 +32,8 @@ export function buildReport({ store, config }) {
 
   return {
     ordersPlaced: store.counters.ordersPlaced,
+    milestoneInterval: config.milestoneInterval,
+    couponPercentOff: config.couponPercentOff,
     unitsByProduct: [...unitsByProduct.values()],
     grossRevenueMinor,
     totalDiscountsMinor,
